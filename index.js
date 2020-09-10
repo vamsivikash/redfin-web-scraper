@@ -2,7 +2,6 @@ const axios = require('axios');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const fs = require('fs');
-const { removeListener } = require('process');
 
 
 const SEARCH_BOX = '#search-box-input';
@@ -14,7 +13,6 @@ const MIN = '.minBeds';
 const BASE_URL = "https://redfin.com";
 
 function scrapeContent(scrapeData){
-    //console.log(scrapeData);
     fs.writeFile("output/test.txt", scrapeData, function(err){
         if(err)
             console.log("ERROR writing the file ", err)
@@ -48,66 +46,70 @@ function scrapeContent(scrapeData){
 }
 
 function parseHomeFacts(homeDetails){
-    let details = {};
+    // returns a map containing information about the house 
+
     const $ = cheerio.load(homeDetails);
-    let test = $('div.keyDetailsList');
-    //let test = $('div.keyDetailsList')[1].children;
-    // test holds the 8 home fact fields 
-    console.log("########", test);
+    // keyDetailsList[0] = Holds information about "Price Insights"
+    // keyDetailsList[1] = Holds information about "Home Facts"
+    let completeFactsList = $('div.keyDetailsList')[1].children;
+    let factMap = new Map(); 
+
+    completeFactsList.forEach((fact) => {
+        factMap.set($(fact.children[0]).text(), $(fact.children[1]).text());
+    });
+
+    let propertyDetails = $('div.desktop > .HomeInfo > .top-stats > .HomeMainStats');
+    let baths = $(propertyDetails[0].children[2].children[0]).text();
+    let sqft = $(propertyDetails[0].children[3].children[0]).text();
+    
+    factMap.set('baths', baths);
+    factMap.set('sqft', sqft);
+
+    //console.log(factMap);
+
     return new Promise((resolve, reject) => {
-        resolve(details);
+        resolve(factMap);
     });
 }
 
+function notification(scrapeData){
+    console.log(scrapeData[0].get('Status'));
 
+
+
+    return new Promise((resolve, reject) => {
+        resolve("Hello");
+    });
+}
 
 async function main(){
-
+    let scrapeInfo =[];
     await puppeteer.launch({ headless: true })
         .then(async(browser) => {
             let page = await browser.newPage(); 
             page.setViewport({width: 1386, height: 768});
             await page.goto('https://www.redfin.com/zipcode/98005/filter/max-price=5M,min-beds=5,max-beds=5,min-baths=5', {waitUntil: 'domcontentloaded'});
 
-            // await page.click(FILTER_BUTTON);
-            // await page.select('span.minBeds')
-            // await page.keyboard.type()
-            // await page.keyboard.type(SEARCH_INPUT);
-            // await page.click(SEARCH_BUTTON);
-            // await page.waitForNavigation({ waitUntil: 'load' })
             const content = await page.content();
             let housesInfoList = await scrapeContent(content);
-            //console.log("####", housesInfoList.length);
-
-            housesInfoList.forEach(async(house, index) => {
+            
+            const scrapeInfo = await housesInfoList.map( async(house, index) => {
                 let houseDetailsPage = await browser.newPage(); 
                 await houseDetailsPage.goto(housesInfoList[index].link, {waitUntil: 'domcontentloaded'});
                 const houseCont = await houseDetailsPage.content(); 
-                await parseHomeFacts(houseCont);
+                let details = await parseHomeFacts(houseCont); 
+                return details;  
+            });
+            await Promise.all(scrapeInfo).then(async(value) => {
+                await notification(value);
+
             });
 
-            
             setTimeout(async() => {
                 await browser.close();
            }, 3000);
 
         });
-
-
-//    const browser = await puppeteer.launch({
-//        headless: true
-//    });
-   
-//    const page = await browser.newPage(); 
-//    await page.goto('https://redfin.com', {waitUntil: 'domcontentloaded'});
-//    await page.click(SEARCH_BOX); 
-//    await page.keyboard.type(SEARCH_INPUT);
-//    await page.click(SEARCH_BUTTON);
-
-
-//    const content = await page.content(); 
-//    await scrapeContent(content);
-
 }
 
 main();
