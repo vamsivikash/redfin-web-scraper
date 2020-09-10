@@ -4,12 +4,7 @@ const cheerio = require('cheerio');
 const fs = require('fs');
 
 
-const SEARCH_BOX = '#search-box-input';
-const SEARCH_INPUT = '98005';
-const SEARCH_BUTTON = '.SearchButton';
-
-const FILTER_BUTTON = '.wideSidepaneFilterButton';
-const MIN = '.minBeds';
+const SEARCH_STATUS = "Active";
 const BASE_URL = "https://redfin.com";
 
 function scrapeContent(scrapeData){
@@ -72,18 +67,28 @@ function parseHomeFacts(homeDetails){
     });
 }
 
-function notification(scrapeData){
-    console.log(scrapeData[0].get('Status'));
-
-
-
+function filterNotificationDetails(scrapeData){
+    let timeOnWeb, MLS, community;
+    let notes = [];    
+    scrapeData.map((house, index) => {
+        if(SEARCH_STATUS === house.get('Status')){
+            timeOnWeb = house.get('Time on Redfin');
+            MLS = house.get('MLS#');
+            community = house.get('Community'); 
+        }
+        notes.push({
+            "TimeOnWeb": timeOnWeb, 
+            "MLS_ID": MLS, 
+            "Community": community, 
+            "Serial_No": index
+        });
+    });
     return new Promise((resolve, reject) => {
-        resolve("Hello");
+        resolve(notes);
     });
 }
 
 async function main(){
-    let scrapeInfo =[];
     await puppeteer.launch({ headless: true })
         .then(async(browser) => {
             let page = await browser.newPage(); 
@@ -101,14 +106,16 @@ async function main(){
                 return details;  
             });
             await Promise.all(scrapeInfo).then(async(value) => {
-                await notification(value);
-
+                let notification = await filterNotificationDetails(value);
+                await Promise.all(notification).then(async(emailData) => {
+                    console.log(emailData);
+                    //sendNotifications(value);
+                })
             });
 
             setTimeout(async() => {
                 await browser.close();
-           }, 3000);
-
+           }, 2000);
         });
 }
 
