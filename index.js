@@ -1,4 +1,4 @@
-const axios = require('axios');
+const request = require('request');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const fs = require('fs');
@@ -42,7 +42,6 @@ function scrapeContent(scrapeData){
 
 function parseHomeFacts(homeDetails){
     // returns a map containing information about the house 
-
     const $ = cheerio.load(homeDetails);
     // keyDetailsList[0] = Holds information about "Price Insights"
     // keyDetailsList[1] = Holds information about "Home Facts"
@@ -88,35 +87,60 @@ function filterNotificationDetails(scrapeData){
     });
 }
 
+function notifySubscribers(message, key){
+    
+    const url = "https://h3bzqqi2m7.execute-api.us-east-1.amazonaws.com/dev/notifyvamsi?message=" + message;
+
+    const options = {
+        url: url,
+        method: 'GET',
+        headers: {
+            'x-api-key': key
+        }
+    };
+      
+    request(options, (err, res, body) => {
+        if (err) {
+            return console.log(err);
+        }
+        console.log(JSON.parse(body));
+    });
+}
+
 async function main(){
-    await puppeteer.launch({ headless: true })
-        .then(async(browser) => {
-            let page = await browser.newPage(); 
-            page.setViewport({width: 1386, height: 768});
-            await page.goto('https://www.redfin.com/zipcode/98005/filter/max-price=5M,min-beds=5,max-beds=5,min-baths=5', {waitUntil: 'domcontentloaded'});
+    let key = process.argv[2];
+    if(key == null || key == ''){
+        console.log("Please enter a valid API Key!!");
+    }
+    else{
+        await puppeteer.launch({ headless: true })
+            .then(async(browser) => {
+                let page = await browser.newPage(); 
+                page.setViewport({width: 1386, height: 768});
+                await page.goto('https://www.redfin.com/zipcode/98005/filter/max-price=500K,min-beds=2,min-baths=1', {waitUntil: 'domcontentloaded'});
 
-            const content = await page.content();
-            let housesInfoList = await scrapeContent(content);
-            
-            const scrapeInfo = await housesInfoList.map( async(house, index) => {
-                let houseDetailsPage = await browser.newPage(); 
-                await houseDetailsPage.goto(housesInfoList[index].link, {waitUntil: 'domcontentloaded'});
-                const houseCont = await houseDetailsPage.content(); 
-                let details = await parseHomeFacts(houseCont); 
-                return details;  
-            });
-            await Promise.all(scrapeInfo).then(async(value) => {
-                let notification = await filterNotificationDetails(value);
-                await Promise.all(notification).then(async(emailData) => {
-                    console.log(emailData);
-                    //sendNotifications(value);
-                })
-            });
+                const content = await page.content();
+                let housesInfoList = await scrapeContent(content);
+                
+                const scrapeInfo = await housesInfoList.map( async(house, index) => {
+                    let houseDetailsPage = await browser.newPage(); 
+                    await houseDetailsPage.goto(housesInfoList[index].link, {waitUntil: 'domcontentloaded'});
+                    const houseCont = await houseDetailsPage.content(); 
+                    let details = await parseHomeFacts(houseCont); 
+                    return details;  
+                });
+                await Promise.all(scrapeInfo).then(async(value) => {
+                    let notification = await filterNotificationDetails(value);
+                    await Promise.all(notification).then(async(emailData) => {
+                        notifySubscribers(JSON.stringify(emailData), key);
+                    });
+                });
 
-            setTimeout(async() => {
-                await browser.close();
-           }, 2000);
+                setTimeout(async() => {
+                    await browser.close();
+            }, 2000);
         });
+    }
 }
 
 main();

@@ -12,6 +12,8 @@
     "axios": "^0.20.0",
     "cheerio": "^1.0.0-rc.3",
     "fs": "0.0.1-security",
-    "puppeteer": "^5.2.1"
+    "https": "^1.0.0",
+    "puppeteer": "^5.2.1",
+    "request": "^2.88.2"
   }
 }
